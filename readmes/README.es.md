@@ -123,6 +123,7 @@ Usa [.env.example](../.env.example) como base. Las opciones mas importantes son:
 - `MESHSEER_UI_DEFAULT_STYLE`: tema base por defecto de la UI. Valores permitidos: `classic`, `classic-dark`, `amber-monochrome`. Por defecto `amber-monochrome`.
 - `MESHSEER_BIND_HOST`, `MESHSEER_BIND_PORT`: configuracion de bind HTTP.
 - `MESHSEER_ADMIN_BEARER_TOKEN`: habilita la API admin solo local.
+- `MESHSEER_CHAT_WEBHOOK_URL`: URL HTTP(S) opcional que recibe un `POST` JSON, con el mismo evento `chat_message_received`, por cada mensaje broadcast no vacio escuchado en el canal primario. El cuerpo contiene `type`, `ts` y `data` (campos publicos del chat).
 
 Opciones adicionales soportadas:
 

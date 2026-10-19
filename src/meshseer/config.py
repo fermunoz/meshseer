@@ -4,6 +4,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
+from urllib.parse import urlsplit
 
 
 def _optional_int(value: str | None) -> int | None:
@@ -17,6 +18,22 @@ def _optional_stripped(value: str | None) -> str | None:
         return None
     stripped = value.strip()
     return stripped or None
+
+
+def _optional_http_url(value: str | None) -> str | None:
+    normalized = _optional_stripped(value)
+    if normalized is None:
+        return None
+    try:
+        parsed = urlsplit(normalized)
+        if parsed.scheme.lower() not in {"http", "https"} or parsed.hostname is None:
+            raise ValueError
+        port = parsed.port
+        if port is not None and not 1 <= port <= 65535:
+            raise ValueError
+    except ValueError as exc:
+        raise ValueError("MESHSEER_CHAT_WEBHOOK_URL must be a valid HTTP or HTTPS URL") from exc
+    return normalized
 
 
 def _optional_bool(value: str | None, *, default: bool = False) -> bool:
@@ -87,6 +104,7 @@ class Settings:
     local_node_num: int | None
     admin_bearer_token: str | None
     carto_api_key: str | None
+    chat_webhook_url: str | None
     ui_default_style: str
     autotrace_enabled: bool
     autotrace_interval_seconds: int
@@ -124,6 +142,7 @@ class Settings:
             local_node_num=_optional_int(values.get("MESHSEER_LOCAL_NODE_NUM")),
             admin_bearer_token=_optional_stripped(values.get("MESHSEER_ADMIN_BEARER_TOKEN")),
             carto_api_key=_optional_stripped(values.get("MESHSEER_CARTO_API_KEY")),
+            chat_webhook_url=_optional_http_url(values.get("MESHSEER_CHAT_WEBHOOK_URL")),
             ui_default_style=_ui_style(values.get("MESHSEER_UI_DEFAULT_STYLE")),
             autotrace_enabled=_optional_bool(values.get("MESHSEER_AUTOTRACE_ENABLED")),
             autotrace_interval_seconds=int(values.get("MESHSEER_AUTOTRACE_INTERVAL_SECONDS", "300")),

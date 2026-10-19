@@ -18,6 +18,7 @@ def test_settings_defaults():
     assert settings.local_node_num is None
     assert settings.admin_bearer_token is None
     assert settings.carto_api_key is None
+    assert settings.chat_webhook_url is None
     assert settings.ui_default_style == "amber-monochrome"
     assert settings.autotrace_enabled is False
     assert settings.autotrace_position_priority_window_minutes == 15
@@ -47,6 +48,7 @@ def test_settings_override_from_env(tmp_path):
             "MESHSEER_LOCAL_NODE_NUM": "456",
             "MESHSEER_ADMIN_BEARER_TOKEN": "  secret-token  ",
             "MESHSEER_CARTO_API_KEY": "  carto-test-key  ",
+            "MESHSEER_CHAT_WEBHOOK_URL": "  https://example.com/chat-hook  ",
             "MESHSEER_UI_DEFAULT_STYLE": "classic",
             "MESHSEER_AUTOTRACE_ENABLED": "true",
             "MESHSEER_AUTOTRACE_POSITION_PRIORITY_WINDOW_MINUTES": "20",
@@ -73,6 +75,7 @@ def test_settings_override_from_env(tmp_path):
     assert settings.local_node_num == 456
     assert settings.admin_bearer_token == "secret-token"
     assert settings.carto_api_key == "carto-test-key"
+    assert settings.chat_webhook_url == "https://example.com/chat-hook"
     assert settings.ui_default_style == "classic"
     assert settings.autotrace_enabled is True
     assert settings.autotrace_position_priority_window_minutes == 20
@@ -127,6 +130,12 @@ def test_settings_invalid_environment_raises():
 def test_settings_invalid_ui_default_style_raises():
     with pytest.raises(ValueError, match="MESHSEER_UI_DEFAULT_STYLE must be one of"):
         Settings.from_env({"MESHSEER_UI_DEFAULT_STYLE": "sepia"})
+
+
+@pytest.mark.parametrize("url", ["not-a-url", "ftp://example.com/hook", "https://"])
+def test_settings_invalid_chat_webhook_url_raises(url):
+    with pytest.raises(ValueError, match="MESHSEER_CHAT_WEBHOOK_URL must be"):
+        Settings.from_env({"MESHSEER_CHAT_WEBHOOK_URL": url})
 
 
 def test_settings_blank_ui_default_style_uses_default():

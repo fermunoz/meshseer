@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import secrets
+import urllib.request
+from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -58,6 +61,20 @@ PRODUCTION_CSP = "; ".join(
         "form-action 'self'",
     )
 )
+
+CHAT_WEBHOOK_TIMEOUT_SECONDS = 10
+logger = logging.getLogger(__name__)
+
+
+def _post_chat_webhook(url: str, event: dict[str, Any]) -> None:
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(event).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=CHAT_WEBHOOK_TIMEOUT_SECONDS):
+        pass
 
 
 def _is_primary_channel_packet(packet: dict[str, Any]) -> bool:
@@ -325,6 +342,16 @@ def create_app(
         max_connections=settings.ws_max_connections,
         queue_size=settings.ws_queue_size,
     )
+    webhook_executor = (
+        ThreadPoolExecutor(max_workers=1, thread_name_prefix="meshseer-chat-webhook")
+        if settings.chat_webhook_url is not None
+        else None
+    )
+
+    def log_webhook_failure(future: Future[None]) -> None:
+        error = future.exception()
+        if error is not None:
+            logger.error("Chat webhook delivery failed (%s)", type(error).__name__)
 
     def handle_packet(packet: dict[str, Any]) -> None:
         if not _is_primary_channel_packet(packet):
@@ -352,13 +379,15 @@ def create_app(
                     chat_packet.setdefault("from_short_name", sender_node.get("short_name"))
                     chat_packet.setdefault("from_long_name", sender_node.get("long_name"))
                     chat_packet.setdefault("from_node_id", sender_node.get("node_id"))
-            event_broker.publish(
-                {
-                    "type": "chat_message_received",
-                    "ts": utc_now_iso(),
-                    "data": public_chat_message_payload(chat_packet, local_node_num=local_node_num),
-                }
-        )
+            chat_event = {
+                "type": "chat_message_received",
+                "ts": utc_now_iso(),
+                "data": public_chat_message_payload(chat_packet, local_node_num=local_node_num),
+            }
+            event_broker.publish(chat_event)
+            if webhook_executor is not None and settings.chat_webhook_url is not None:
+                future = webhook_executor.submit(_post_chat_webhook, settings.chat_webhook_url, chat_event)
+                future.add_done_callback(log_webhook_failure)
         if (
             _autotrace_position_tracking_enabled(settings, autotrace_service)
             and
@@ -454,6 +483,8 @@ def create_app(
             if app.state.collector_started:
                 collector.stop()
                 app.state.collector_started = False
+            if webhook_executor is not None:
+                webhook_executor.shutdown(wait=True)
 
     app = FastAPI(
         title="Meshseer",

@@ -1,6 +1,8 @@
 import base64
 import json
 import logging
+import threading
+from contextlib import nullcontext
 from datetime import UTC, datetime
 
 import pytest
@@ -2712,6 +2714,88 @@ def test_receiver_originated_packets_broadcast_as_local_without_route_metadata(t
     assert chat_message["type"] == "chat_message_received"
     assert chat_message["data"]["path_tone"] == "local"
     assert chat_message["data"]["path_label"] == "Local"
+
+
+def test_primary_broadcast_chat_is_forwarded_to_configured_webhook(tmp_path, monkeypatch):
+    deliveries = []
+    delivered = threading.Event()
+
+    def fake_urlopen(request, *, timeout):
+        deliveries.append(
+            {
+                "url": request.full_url,
+                "method": request.method,
+                "headers": request.headers,
+                "body": json.loads(request.data),
+                "timeout": timeout,
+            }
+        )
+        delivered.set()
+        return nullcontext()
+
+    monkeypatch.setattr("meshseer.app.urllib.request.urlopen", fake_urlopen)
+    app = create_app(
+        Settings.from_env(
+            {
+                "MESHSEER_DB_PATH": str(tmp_path / "mesh.db"),
+                "MESHSEER_CHAT_WEBHOOK_URL": "https://example.com/chat-hook",
+            }
+        ),
+        start_collector=False,
+        start_autotrace_service=False,
+    )
+    collector = app.state.collector
+
+    with TestClient(app):
+        collector.callbacks.on_packet(
+            {
+                "mesh_packet_id": 41,
+                "received_at": "2026-03-30T12:00:00Z",
+                "from_node_num": 7,
+                "to_node_num": BROADCAST_NODE_NUM,
+                "portnum": "TEXT_MESSAGE_APP",
+                "channel_index": 0,
+                "hop_limit": 1,
+                "hop_start": 1,
+                "text_preview": "hola mesh",
+                "raw_json": "{}",
+            }
+        )
+        assert delivered.wait(timeout=2)
+        collector.callbacks.on_packet(
+            {
+                "mesh_packet_id": 42,
+                "received_at": "2026-03-30T12:01:00Z",
+                "from_node_num": 7,
+                "to_node_num": 101,
+                "portnum": "TEXT_MESSAGE_APP",
+                "channel_index": 0,
+                "text_preview": "private message",
+                "raw_json": "{}",
+            }
+        )
+        collector.callbacks.on_packet(
+            {
+                "mesh_packet_id": 43,
+                "received_at": "2026-03-30T12:02:00Z",
+                "from_node_num": 7,
+                "to_node_num": BROADCAST_NODE_NUM,
+                "portnum": "TEXT_MESSAGE_APP",
+                "channel_index": 2,
+                "text_preview": "other channel",
+                "raw_json": "{}",
+            }
+        )
+
+    assert len(deliveries) == 1
+    delivery = deliveries[0]
+    assert delivery["url"] == "https://example.com/chat-hook"
+    assert delivery["method"] == "POST"
+    assert delivery["headers"]["Content-type"] == "application/json"
+    assert delivery["timeout"] == 10
+    assert delivery["body"]["type"] == "chat_message_received"
+    assert delivery["body"]["data"]["text_preview"] == "hola mesh"
+    assert delivery["body"]["data"]["sender_label"] == "Node 7"
 
 
 def test_chat_api_caps_public_history_to_40_messages(tmp_path):
