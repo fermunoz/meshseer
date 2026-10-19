@@ -127,7 +127,7 @@ Use [.env.example](.env.example) as the baseline. The most important settings ar
 - `MESHSEER_BIND_HOST`, `MESHSEER_BIND_PORT`: HTTP bind settings.
 - `MESHSEER_ADMIN_BEARER_TOKEN`: enables the local-only admin API.
 - `MESHSEER_CARTO_API_KEY`: CARTO raster basemap key. Set this in deployed environments to remove CARTO's API-key watermark. This is a browser-side key and is sent to CARTO with tile requests, so restrict it to the dashboard's domain in CARTO rather than treating it as a server secret.
-- `MESHSEER_CHAT_WEBHOOK_URL`: optional HTTP(S) URL that receives a `POST` with the same JSON event as `chat_message_received` for each non-empty broadcast chat message heard on the primary channel. The request body contains `type`, `ts`, and `data` (public chat fields).
+- `MESHSEER_CHAT_WEBHOOK_URL`: optional HTTP(S) URL that receives a `POST` for each non-empty broadcast chat message heard on the primary channel. The body contains `type`, `ts`, and `data` (the public chat fields plus `sender`, the full stored node record). `data.sender` can include `raw_json` and precise coordinates; only configure a trusted endpoint. The public WebSocket event is unchanged.
 
 Additional supported settings:
 

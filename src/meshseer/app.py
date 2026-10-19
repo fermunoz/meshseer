@@ -373,6 +373,7 @@ def create_app(
         if _is_public_chat_packet(stored):
             chat_packet = dict(stored)
             from_node_num = chat_packet.get("from_node_num")
+            sender_node = None
             if isinstance(from_node_num, int):
                 sender_node = repository.get_node(from_node_num, primary_only=True)
                 if sender_node is not None:
@@ -386,7 +387,20 @@ def create_app(
             }
             event_broker.publish(chat_event)
             if webhook_executor is not None and settings.chat_webhook_url is not None:
-                future = webhook_executor.submit(_post_chat_webhook, settings.chat_webhook_url, chat_event)
+                sender_payload = sender_node or {
+                    "node_num": from_node_num,
+                    "node_id": chat_packet.get("from_node_id"),
+                    "short_name": chat_packet.get("from_short_name"),
+                    "long_name": chat_packet.get("from_long_name"),
+                }
+                webhook_event = {
+                    **chat_event,
+                    "data": {
+                        **chat_event["data"],
+                        "sender": sender_payload,
+                    },
+                }
+                future = webhook_executor.submit(_post_chat_webhook, settings.chat_webhook_url, webhook_event)
                 future.add_done_callback(log_webhook_failure)
         if (
             _autotrace_position_tracking_enabled(settings, autotrace_service)

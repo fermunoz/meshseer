@@ -2745,6 +2745,31 @@ def test_primary_broadcast_chat_is_forwarded_to_configured_webhook(tmp_path, mon
         start_autotrace_service=False,
     )
     collector = app.state.collector
+    app.state.repository.upsert_node(
+        NodeRecord.from_mapping(
+            {
+                "node_num": 7,
+                "node_id": "!00000007",
+                "short_name": "NODE7",
+                "long_name": "Sender Node",
+                "hardware_model": "TBEAM",
+                "role": "CLIENT",
+                "channel_index": 0,
+                "last_heard_at": "2026-03-30T11:59:00Z",
+                "last_snr": 5.5,
+                "latitude": 10.25789,
+                "longitude": -84.12349,
+                "altitude": 22.0,
+                "battery_level": 87,
+                "channel_utilization": 10.5,
+                "air_util_tx": 2.5,
+                "raw_json": '{"num":7,"position":{"latitude":10.25789,"longitude":-84.12349}}',
+                "updated_at": "2026-03-30T12:00:00Z",
+                "hops_away": 1,
+                "via_mqtt": False,
+            }
+        )
+    )
 
     with TestClient(app):
         collector.callbacks.on_packet(
@@ -2795,7 +2820,13 @@ def test_primary_broadcast_chat_is_forwarded_to_configured_webhook(tmp_path, mon
     assert delivery["timeout"] == 10
     assert delivery["body"]["type"] == "chat_message_received"
     assert delivery["body"]["data"]["text_preview"] == "hola mesh"
-    assert delivery["body"]["data"]["sender_label"] == "Node 7"
+    sender = delivery["body"]["data"]["sender"]
+    assert sender["node_id"] == "!00000007"
+    assert sender["short_name"] == "NODE7"
+    assert sender["hardware_model"] == "TBEAM"
+    assert sender["latitude"] == 10.25789
+    assert sender["longitude"] == -84.12349
+    assert sender["raw_json"] == '{"num":7,"position":{"latitude":10.25789,"longitude":-84.12349}}'
 
 
 def test_chat_api_caps_public_history_to_40_messages(tmp_path):
