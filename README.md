@@ -82,6 +82,7 @@ Notes:
 
 - The container stores SQLite data in the Docker volume `meshseer-data`.
 - The container listens on `0.0.0.0:8000` internally and is published on `127.0.0.1:8000` by default.
+- If port `8000` is already occupied, set `MESHSEER_BIND_PORT` to a free port and use that same port as the host and container port mapping (Docker) or the target port (EasyPanel). The container health check follows `MESHSEER_BIND_PORT`.
 - If you want local-only admin routes, also set `MESHSEER_ADMIN_BEARER_TOKEN` in `.env`.
 - Docker support currently assumes Meshtastic TCP. USB serial passthrough and BLE are not implemented.
 - If you prefer Compose, use the included [`compose.yaml`](compose.yaml) as a starting point or replace the local `build:` step with `image: ghcr.io/juanmhuerta/meshseer:latest`.
